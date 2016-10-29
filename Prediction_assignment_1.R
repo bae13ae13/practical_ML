@@ -45,8 +45,6 @@ names(data_training)
 
 
 ## Data Exploration 
-library(ggplot2); library(rpart)
-
 qplot(magnet_dumbbell_z, total_accel_dumbbell, colour=classe,data=training)
 
 qplot(max_yaw_belt, magnet_dumbbell_z, colour=classe,data=training)
