@@ -1,0 +1,136 @@
+title	author	date	output
+Practical Machine Learning porject
+Wangsik Kim
+2016-10-28
+html_document
+Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+library(caret); library(kernlab); library(lattice); library(ggplot2)
+library(e1071); library(Hmisc); library(gridExtra); library(RANN)
+library(rpart); library(rattle); library(rpart.plot); library(purrr)
+library(tidyr); library(magrittr); library(dplyr)
+
+# Load the training dataset
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+              destfile = "./pml-training.csv", method = "curl")
+
+
+data_training <- read.csv("./pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+
+
+## Data partitioning
+inTrain <- createDataPartition(y=data_training$classe, 
+                               p=0.75, list=FALSE)
+
+
+training <- data_training[inTrain, ]
+testing <- data_training[-inTrain, ]
+dim(training); dim(testing)
+
+
+summary(data_training$classe)
+
+##To check variables with missing values
+apply(data_training,2,function(x) sum(is.na(x)))
+
+### There are unnecessary variables in dataset
+training_final <- training[, -c(1:7)]
+testing_final <- testing[, -c(1:7)]
+
+#Remove those columns with missing values (except classe column)
+
+training_final_clean  <- training_final[ ,!names(training_final) %in% names(training_final)[apply(training_final, 2, anyNA)]]
+testing_final_clean <- testing_final[ , !names(testing_final) %in% names(testing_final)[apply(testing_final, 2, anyNA)]]
+
+
+names(training_final_clean)
+
+Variale selection Sometimes, one may face a problem with many variable. It is a good practice to check plot by a group of variable to identify importance of variables. I highlighted and demonstrated some of key findings.
+
+## Data Exploration 
+qplot(magnet_dumbbell_z, total_accel_dumbbell, colour=classe,data=training)
+
+qplot(max_yaw_belt, magnet_dumbbell_z, colour=classe,data=training)
+
+
+# plot densities
+
+sm.density.compare(training$magnet_dumbbell_z, training$classe, xlab="magnet_dumbbell_z")
+title(main="magnet_dumbbell_z by classe")
+
+sm.density.compare(training$magnet_arm_z, training$classe, xlab="magnet_dumbbell_z")
+title(main="magnet_dumbbell_z by classe")
+
+
+histogram(~magnet_dumbbell_z|classe,data=training,
+          type="density",
+          xlab="Speed of Motion",
+          main="Magnet Dumbbell_z by classe",
+          breaks=30)
+
+histogram(~magnet_arm_z|classe,data=training,
+          type="density",
+          xlab="Speed of Motion",
+          main="Magnet Dumbbell_z by classe",
+          breaks=30)
+Note that the echo = FALSE parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+Model I
+
+Based on data exploration, I ran a tree model, which will be compared with other model to see any performance imporvement or difference.
+
+## predicting with selected variables
+library(rattle)
+g <- classe ~ total_accel_dumbbell +magnet_belt_y + accel_arm_z + yaw_dumbbell  + gyros_dumbbell_y + magnet_dumbbell_z + total_accel_dumbbell + accel_arm_z 
+
+model_with_tree1 <- train(g, data = training_final_clean, method = 'rpart')
+
+predicted_outcome1 <- predict(model_with_tree1, testing_final_clean)
+
+outcome_value_with_tree1 <- confusionMatrix(predicted_outcome1, testing_final_clean$classe)$overall[['Accuracy']]
+print(outcome_value_with_tree1)
+Model II Here is a model with all variables from training dataset. Key point to be noted is that there is very small difference between training and testing outcome by model. But performance in general is not good since accurace is around 50%.
+
+##Decision Tree Model
+model_with_tree <- train(classe ~ . , data = training_final_clean, method = 'rpart')
+
+predicted_outcome11 <- predict(model_with_tree, training_final_clean)
+outcome_value_with_tree11 <- confusionMatrix(predicted_outcome11, training_final_clean$classe)$overall[['Accuracy']]
+print(outcome_value_with_tree11)
+
+predicted_outcome22 <- predict(model_with_tree, testing_final_clean)
+outcome_value_with_tree22 <- confusionMatrix(predicted_outcome22, testing_final_clean$classe)$overall[['Accuracy']]
+print(outcome_value_with_tree22)
+
+## Visualization on Tree 
+fancyRpartPlot(model_with_tree$finalModel)
+Model III Random forest demonstrated a outstanding performance over here. And there is no overfitting situation since performance difference between training and testing set is minimal. Howevere, there is many different types of dangers. No.1 is interpretability is very low, not to mention that visualization is tricky. No.2 disadvantage is that we don't even know what is exactly going one inside model.
+
+install.packages("randomForest")
+library(randomForest)
+
+set.seed(777)
+model_fit_out <- randomForest(classe ~ ., data = training_final_clean, ntree = 777)
+
+prediction1 <- predict(model_fit_out, training_final_clean, type = "class")
+outcome_value_training_1 <- confusionMatrix(prediction1, training_final_clean$classe)$overall[['Accuracy']] 
+print(outcome_value_training_1)
+
+prediction2 <- predict(model_fit_out , testing_final_clean, type = "class")
+outcome_value_testing_2 <- confusionMatrix(prediction2, testing_final_clean$classe)$overall[['Accuracy']] 
+print(outcome_value_testing_2)
+So called too good to be true. This model may not be best model in real world. Thus, we may want to do something further on sampling design (k fold, random sampling, bagging for minimizing bias and distortion). It seems that, based on two models' performance between training and testing set, it is highly likely to be the case data itself is not representing real world or too much connectedness between them.
